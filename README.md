@@ -1,46 +1,38 @@
 # Code AI Iterator
 
-A web-based collaborative code exploration and editing tool with advanced file management capabilities.
+A modern web-based collaborative code exploration and editing tool with advanced file management and merge editing capabilities.
 
 ## Features
 
-### File Explorer
-- Advanced file browsing and management
-- File type detection with appropriate icons
-- Sorting capabilities
-- Search and filter functionality
-- Loading indicators
-- Dark-themed UI
-
-### Editor
-- Split-pane interface
-- Syntax highlighting for multiple languages
-- Synchronized scrolling
-- Diff view comparison
-- Code folding
-- Auto-completion
-- Auto-closing brackets
-- Line numbers
-- Active line highlighting
+- 🗂️ File Explorer with real-time file system navigation
+- ✨ Dual-pane code editor with syntax highlighting
+- 🔄 Real-time merge view highlighting
+- 📝 Live file editing and saving
+- 🎨 Modern Material Design UI components
+- 🌓 Dark theme support
+- 🔍 Side-by-side code comparison
+- 🔄 Synchronized scrolling between editors
 
 ## Technology Stack
 
-### Frontend
-- Web Components (LitElement)
-- CodeMirror 6 for code editing
-- Material Web Components
-- Split.js for split panes
-- Dark theme (One Dark)
+- **Frontend**
+  - Web Components (LitElement)
+  - CodeMirror 6 for code editing
+  - Material Web Components
+  - Split.js for resizable panes
+  - diff library for code comparison
 
-### Backend
-- Express.js
-- CORS enabled
+- **Backend**
+  - Express.js
+  - Node.js File System API
+  - CORS enabled
 
 ## Getting Started
 
 ### Prerequisites
-- Node.js (Latest LTS version recommended)
-- npm
+
+- Node.js (v14 or higher)
+- npm (v6 or higher)
 
 ### Installation
 
@@ -57,45 +49,61 @@ npm install
 
 3. Start the development server:
 ```bash
-npm start
+npm run dev
 ```
 
-This will start both the backend server and the frontend development server concurrently.
-- Backend: http://localhost:3001
-- Frontend: http://localhost:8000
+This will start both the backend server (port 3001) and the frontend development server.
 
 ## Development
 
-The project uses the following development tools:
-- @web/dev-server for frontend development
-- concurrently for running multiple servers
-
-## Project Structure
-
+The project uses the following structure:
 ```
 code-ai-iterator/
 ├── src/
-│   └── components/
-│       ├── app-root.js        # Main application component
-│       ├── file-explorer.js   # File browsing component
-│       ├── code-editor.js     # Code editor wrapper
-│       └── enhanced-editor.js # Extended CodeMirror editor
+│   ├── components/
+│   │   ├── app-root.js        # Main application component
+│   │   ├── enhanced-editor.js # CodeMirror editor wrapper
+│   │   └── file-explorer.js   # File system navigation
+│   └── index.html
 ├── server.js                  # Express backend server
-├── index.html                 # Main HTML entry
-└── package.json              # Project dependencies
+├── package.json
+└── README.md
 ```
 
-## Future Improvements
+### Key Components
 
-1. User Authentication
-2. Enhanced File Operations
-3. Plugin Architecture
-4. Performance Optimization
-5. Comprehensive Error Handling
+- **app-root**: Main application component managing the overall layout and state
+- **enhanced-editor**: Custom CodeMirror 6 editor with merge highlighting
+- **file-explorer**: File system navigation component
+
+### Features in Detail
+
+#### Merge View Highlighting
+- Real-time diff visualization
+- Green highlights for additions (right pane)
+- Red highlights for deletions (left pane)
+- Synchronized scrolling option
+
+#### File Management
+- File system navigation
+- File creation and deletion
+- Real-time file saving
+- Automatic syntax highlighting based on file type
+
+## Scripts
+
+- `npm run dev`: Start both frontend and backend in development mode
+- `npm start`: Start the production server
+- `npm run client`: Start only the frontend development server
+- `npm run server`: Start only the backend server
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ## License
 
