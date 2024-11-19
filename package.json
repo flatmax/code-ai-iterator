@@ -6,7 +6,8 @@
   "scripts": {
     "start": "concurrently \"npm run server\" \"npm run client\"",
     "server": "node server.js",
-    "client": "web-dev-server --node-resolve --open --watch",
+    "client": "web-dev-server --node-resolve --open",
+    "dev": "concurrently \"npm run server\" \"web-dev-server --node-resolve --open --watch\"",
     "stop": "pkill -f 'node server.js' || true && pkill -f '@web/dev-server' || true"
   },
   "dependencies": {
