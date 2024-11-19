@@ -6,6 +6,19 @@ import '@material/mwc-textfield/mwc-textfield.js';
 import '@material/mwc-select/mwc-select.js';
 import '@material/mwc-list/mwc-check-list-item.js';
 
+// Debounce function to limit API calls
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
 export class FileExplorer extends LitElement {
     static properties = {
         currentPath: { type: String },
@@ -14,7 +27,8 @@ export class FileExplorer extends LitElement {
         sortOrder: { type: String },
         filterText: { type: String },
         selectedTypes: { type: Array },
-        loading: { type: Boolean }
+        loading: { type: Boolean },
+        error: { type: String }
     };
 
     static styles = css`
@@ -28,6 +42,7 @@ export class FileExplorer extends LitElement {
             display: flex;
             flex-direction: column;
             height: 100%;
+            position: relative;
         }
         .path-header {
             padding: 8px;
@@ -69,6 +84,7 @@ export class FileExplorer extends LitElement {
         .file-list {
             flex: 1;
             overflow: auto;
+            position: relative;
         }
         mwc-list-item {
             --mdc-theme-primary: #d4d4d4;
@@ -85,13 +101,18 @@ export class FileExplorer extends LitElement {
         .file-icon {
             width: 20px;
             height: 20px;
+            flex-shrink: 0;
         }
         .file-info {
             display: flex;
             flex-direction: column;
+            min-width: 0;
         }
         .file-name {
             font-size: 14px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         .file-meta {
             font-size: 12px;
@@ -140,6 +161,14 @@ export class FileExplorer extends LitElement {
         .type-chip.selected {
             background: #007acc;
         }
+        .error-message {
+            color: #f48771;
+            padding: 8px;
+            margin: 8px;
+            background: #332b2b;
+            border-radius: 4px;
+            font-size: 14px;
+        }
     `;
 
     constructor() {
@@ -151,12 +180,68 @@ export class FileExplorer extends LitElement {
         this.filterText = '';
         this.selectedTypes = [];
         this.loading = false;
+        this.error = '';
         this.fileTypes = new Set();
+        
+        // Debounced methods
+        this.debouncedLoadFiles = debounce(this.loadFiles.bind(this), 300);
+        this.debouncedUpdateFilteredFiles = debounce(this.updateFilteredFiles.bind(this), 100);
     }
 
-    async connectedCallback() {
+    connectedCallback() {
         super.connectedCallback();
-        await this.loadFiles();
+        this.loadFiles();
+    }
+
+    async loadFiles() {
+        if (this.loading) return;
+        
+        this.loading = true;
+        this.error = '';
+        
+        try {
+            const response = await fetch(`http://localhost:3001/api/files?path=${encodeURIComponent(this.currentPath || '.')}`, {
+                signal: AbortSignal.timeout(5000) // 5-second timeout
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Failed to load files: ${response.statusText}`);
+            }
+            
+            const data = await response.json();
+            
+            if (!Array.isArray(data)) {
+                throw new Error('Invalid response format');
+            }
+            
+            this.files = data;
+            
+            // Update file types
+            this.fileTypes = new Set(
+                this.files
+                    .filter(f => f.type === 'file')
+                    .map(f => f.name.split('.').pop()?.toLowerCase())
+                    .filter(Boolean)
+            );
+            
+            this.updateFilteredFiles();
+        } catch (error) {
+            console.error('Error loading files:', error);
+            this.error = error.message;
+            
+            // Only use fallback data if we have no existing files
+            if (!this.files.length) {
+                this.files = [
+                    { name: 'src', type: 'directory', size: 0, modified: new Date() },
+                    { name: 'package.json', type: 'file', size: 1024, modified: new Date() },
+                    { name: 'README.md', type: 'file', size: 512, modified: new Date() },
+                    { name: 'index.html', type: 'file', size: 2048, modified: new Date() }
+                ];
+                this.updateFilteredFiles();
+            }
+        } finally {
+            this.loading = false;
+        }
     }
 
     getFileIcon(file) {
@@ -204,37 +289,6 @@ export class FileExplorer extends LitElement {
             index++;
         }
         return `${size.toFixed(1)} ${units[index]}`;
-    }
-
-    async loadFiles() {
-        this.loading = true;
-        try {
-            const response = await fetch(`http://localhost:3001/api/files?path=${encodeURIComponent(this.currentPath || '.')}`);
-            if (!response.ok) throw new Error('Failed to load files');
-            this.files = await response.json();
-            
-            // Update file types
-            this.fileTypes = new Set(
-                this.files
-                    .filter(f => f.type === 'file')
-                    .map(f => f.name.split('.').pop()?.toLowerCase())
-                    .filter(Boolean)
-            );
-            
-            this.updateFilteredFiles();
-        } catch (error) {
-            console.error('Error loading files:', error);
-            // Fallback to mock data
-            this.files = [
-                { name: 'src', type: 'directory', size: 0, modified: new Date() },
-                { name: 'package.json', type: 'file', size: 1024, modified: new Date() },
-                { name: 'README.md', type: 'file', size: 512, modified: new Date() },
-                { name: 'index.html', type: 'file', size: 2048, modified: new Date() }
-            ];
-            this.updateFilteredFiles();
-        } finally {
-            this.loading = false;
-        }
     }
 
     updateFilteredFiles() {
@@ -287,12 +341,12 @@ export class FileExplorer extends LitElement {
 
     handleFilterInput(e) {
         this.filterText = e.target.value;
-        this.updateFilteredFiles();
+        this.debouncedUpdateFilteredFiles();
     }
 
     handleSortChange(e) {
         this.sortOrder = e.target.value;
-        this.updateFilteredFiles();
+        this.debouncedUpdateFilteredFiles();
     }
 
     toggleTypeFilter(type) {
@@ -301,13 +355,13 @@ export class FileExplorer extends LitElement {
         } else {
             this.selectedTypes = [...this.selectedTypes, type];
         }
-        this.updateFilteredFiles();
+        this.debouncedUpdateFilteredFiles();
     }
 
     async handleFileClick(file) {
         if (file.type === 'directory') {
             this.currentPath = this.currentPath ? `${this.currentPath}/${file.name}` : file.name;
-            await this.loadFiles();
+            this.debouncedLoadFiles();
         } else {
             try {
                 const response = await fetch(`http://localhost:3001/api/files/content?path=${encodeURIComponent(file.path)}`);
@@ -334,10 +388,10 @@ export class FileExplorer extends LitElement {
     async handleBackClick() {
         if (!this.currentPath) return;
         
-        const parts = this.currentPath.split('/');
+        const parts = this.currentPath.split('/').filter(Boolean); // Filter out empty strings
         parts.pop();
-        this.currentPath = parts.join('/');
-        await this.loadFiles();
+        this.currentPath = parts.join('/'); // This will be empty string for root directory
+        this.debouncedLoadFiles();
     }
 
     render() {
@@ -408,6 +462,10 @@ export class FileExplorer extends LitElement {
                     <div class="loading-overlay">
                         <div class="loading-spinner"></div>
                     </div>
+                ` : ''}
+                
+                ${this.error ? html`
+                    <div class="error-message">${this.error}</div>
                 ` : ''}
             </div>
         `;
