@@ -1,6 +1,6 @@
 import { LitElement, html, css } from 'lit';
 import Split from 'split.js';
-import { createPatch } from 'diff';
+import { createPatch, diffLines } from 'diff';
 import './file-explorer.js';
 import './enhanced-editor.js';
 
@@ -104,26 +104,15 @@ export class AppRoot extends LitElement {
         });
     }
 
-    async handleFileSelected(event) {
-        const { path, name, content } = event.detail;
+    handleFileSelected(event) {
+        const { path, content, name, language } = event.detail;
         
-        const fileData = {
-            name,
-            path,
-            content,
-            language: name.split('.').pop() || ''
-        };
-
-        if (!this.leftFile) {
-            this.leftFile = fileData;
-        } else if (!this.rightFile) {
-            this.rightFile = fileData;
-        } else {
-            this.leftFile = fileData;
-        }
-
-        if (this.diffMode && this.leftFile && this.rightFile) {
-            this.updateDiff();
+        // Only load into left editor
+        this.leftFile = { path, content, name, language };
+        
+        // Update merge view if right editor has content
+        if (this.rightFile && this.rightFile.content) {
+            this.updateMergeView();
         }
     }
 
@@ -131,21 +120,31 @@ export class AppRoot extends LitElement {
         const { content, filename } = event.detail;
         const file = side === 'left' ? this.leftFile : this.rightFile;
         
-        if (!file) return;
+        if (!file) {
+            if (side === 'right') {
+                // Handle manual content in right editor
+                this.rightFile = {
+                    name: this.leftFile ? this.leftFile.name : 'Untitled',
+                    content: content,
+                    language: this.leftFile ? this.leftFile.language : 'text'
+                };
+            }
+            return;
+        }
 
         try {
-            const response = await fetch('http://localhost:3001/api/files/save', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    path: file.path,
-                    content: content
-                })
-            });
-
-            if (!response.ok) throw new Error('Failed to save file');
+            if (file.path) {  // Only save if the file has a path
+                const response = fetch('http://localhost:3001/api/files/save', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        path: file.path,
+                        content: content
+                    })
+                });
+            }
 
             if (side === 'left') {
                 this.leftFile = { ...this.leftFile, content };
@@ -153,44 +152,69 @@ export class AppRoot extends LitElement {
                 this.rightFile = { ...this.rightFile, content };
             }
 
-            if (this.diffMode) {
-                this.updateDiff();
+            // Update merge highlights if not in diff mode
+            if (!this.diffMode) {
+                this.updateMergeView();
             }
         } catch (error) {
             console.error('Error saving file:', error);
         }
     }
 
-    updateDiff() {
+    updateMergeView() {
         if (!this.leftFile || !this.rightFile) return;
 
-        const patch = createPatch(
-            this.leftFile.name,
-            this.leftFile.content || '',
-            this.rightFile.content || '',
-            'Original',
-            'Modified'
-        );
+        const leftContent = this.leftFile.content || '';
+        const rightContent = this.rightFile.content || '';
 
-        // Update the right editor with the diff
+        // Calculate diffs with more precise options
+        const diffs = diffLines(leftContent, rightContent, {
+            newlineIsToken: true,
+            ignoreWhitespace: false,
+            ignoreCase: false
+        });
+
+        // Update both editors with highlights
+        const leftEditor = this.shadowRoot.querySelector('enhanced-editor[side="left"]');
         const rightEditor = this.shadowRoot.querySelector('enhanced-editor[side="right"]');
+
+        // Apply highlights to both editors
+        if (leftEditor) {
+            leftEditor.updateMergeHighlights(diffs);
+        }
         if (rightEditor) {
-            rightEditor.content = patch;
-            rightEditor.language = 'diff';
-            rightEditor.readOnly = true;
+            rightEditor.updateMergeHighlights(diffs);
         }
     }
 
     toggleDiffMode() {
         this.diffMode = !this.diffMode;
         if (this.diffMode && this.leftFile && this.rightFile) {
-            this.updateDiff();
-        } else if (!this.diffMode && this.rightFile) {
+            const patch = createPatch(
+                this.leftFile.name,
+                this.leftFile.content || '',
+                this.rightFile.content || '',
+                'Original',
+                'Modified'
+            );
+
+            // When in diff mode, show the patch in the right editor
             const rightEditor = this.shadowRoot.querySelector('enhanced-editor[side="right"]');
             if (rightEditor) {
-                rightEditor.content = this.rightFile.content;
-                rightEditor.language = this.rightFile.language;
+                rightEditor.content = patch;
+                rightEditor.language = 'diff';
+                rightEditor.readOnly = true;
+            }
+        } else {
+            // When exiting diff mode, restore the right editor's content
+            const rightEditor = this.shadowRoot.querySelector('enhanced-editor[side="right"]');
+            if (rightEditor) {
+                rightEditor.content = this.rightFile ? this.rightFile.content : '';
+                rightEditor.language = this.rightFile ? this.rightFile.language : 'text';
                 rightEditor.readOnly = false;
+                
+                // Update merge view highlights
+                this.updateMergeView();
             }
         }
     }
@@ -222,6 +246,7 @@ export class AppRoot extends LitElement {
                     <file-explorer></file-explorer>
                 </div>
                 <div class="editor-container">
+                    <button @click="${this.updateMergeView}">Refresh Merge View</button>
                     <div class="editor">
                         <enhanced-editor
                             side="left"
